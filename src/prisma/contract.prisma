@@ -1,0 +1,121 @@
+ // use prisma-next
+
+model Business {
+  id        Int        @id @default(autoincrement())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+
+  products  Product[]
+  customers Customer[]
+  sales     Sale[]
+  expenses  Expense[]
+  payments  Payment[]
+}
+
+model Product {
+  id           Int        @id @default(autoincrement())
+  business     Business   @relation(fields: [businessId], references: [id])
+  businessId   Int
+
+  name         String
+  sku          String?
+  category     String?
+  quantity     Int        @default(0)
+  costPrice    Int
+  sellingPrice Int
+
+  createdAt    TimestamptzString @default(now())
+  updatedAt    temporal.updatedAtString()
+
+  saleItems    SaleItem[]
+}
+
+model Customer {
+  id         Int        @id @default(autoincrement())
+  business   Business   @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+
+  createdAt  TimestamptzString @default(now())
+  updatedAt  temporal.updatedAtString()
+
+  sales      Sale[]
+  payments   Payment[]
+}
+
+model Sale {
+  id            Int        @id @default(autoincrement())
+  business      Business   @relation(fields: [businessId], references: [id])
+  businessId    Int
+
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  customerId    Int?
+
+  totalAmount   Int
+  amountPaid    Int        @default(0)
+  paymentStatus String     @default("PAID")
+  notes         String?
+
+  createdAt     TimestamptzString @default(now())
+  updatedAt     temporal.updatedAtString()
+
+  items         SaleItem[]
+  payments      Payment[]
+}
+
+model SaleItem {
+  id         Int        @id @default(autoincrement())
+  sale       Sale       @relation(fields: [saleId], references: [id])
+  saleId     Int
+
+  product    Product    @relation(fields: [productId], references: [id])
+  productId  Int
+
+  quantity   Int
+  unitPrice  Int
+  totalPrice Int
+
+  createdAt  TimestamptzString @default(now())
+}
+
+model Expense {
+  id          Int        @id @default(autoincrement())
+  business    Business   @relation(fields: [businessId], references: [id])
+  businessId  Int
+
+  description String
+  category    String?
+  amount      Int
+  notes       String?
+
+  createdAt   TimestamptzString @default(now())
+  updatedAt   temporal.updatedAtString()
+}
+
+model Payment {
+  id          Int        @id @default(autoincrement())
+
+  business    Business   @relation(fields: [businessId], references: [id])
+  businessId  Int
+
+  sale        Sale       @relation(fields: [saleId], references: [id])
+  saleId      Int
+
+  customer    Customer   @relation(fields: [customerId], references: [id])
+  customerId  Int
+
+  amount      Int
+
+  paymentMethod String?
+  notes         String?
+
+  createdAt   TimestamptzString @default(now())
+}
