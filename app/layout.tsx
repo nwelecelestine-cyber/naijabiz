@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NaijaBiz",
   description: "Simple business management for Nigerian businesses",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/naijabiz-logo.png",
     apple: "/naijabiz-logo.png",
