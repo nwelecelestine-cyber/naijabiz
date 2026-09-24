@@ -1,6 +1,7 @@
-import { createClient } from "@/src/lib/supabase/server";
+﻿import { createClient } from "@/src/lib/supabase/server";
+import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
@@ -9,7 +10,7 @@ export async function POST() {
     if (error) {
       console.error("LOGOUT ERROR:", error);
 
-      return Response.json(
+      return NextResponse.json(
         {
           success: false,
           error: "Could not log out.",
@@ -18,13 +19,14 @@ export async function POST() {
       );
     }
 
-    return Response.json({
-      success: true,
-    });
+    return NextResponse.redirect(
+      new URL("/auth/login", request.url),
+      303
+    );
   } catch (error) {
     console.error("LOGOUT ERROR:", error);
 
-    return Response.json(
+    return NextResponse.json(
       {
         success: false,
         error: "Could not log out.",

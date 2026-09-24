@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/src/components/AppShell";
@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NaijaBiz",
   description: "Simple business management for Nigerian businesses",
+  icons: {
+    icon: "/naijabiz-logo.png",
+    apple: "/naijabiz-logo.png",
+  },
 };
 
 export default function RootLayout({

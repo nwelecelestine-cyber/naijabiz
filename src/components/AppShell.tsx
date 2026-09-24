@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -35,7 +35,6 @@ export default function AppShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Authentication pages use their own clean layout.
   if (pathname.startsWith("/auth/")) {
     return <>{children}</>;
   }
@@ -93,8 +92,12 @@ export default function AppShell({
             onClick={() => navigate("/")}
             className="flex items-center gap-3"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7a9e7e] text-lg font-bold text-white shadow-sm">
-              N
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+              <img
+                src="/naijabiz-logo.png"
+                alt="NaijaBiz"
+                className="h-full w-full object-contain"
+              />
             </div>
 
             <div className="text-left">
@@ -186,8 +189,12 @@ export default function AppShell({
           onClick={() => navigate("/")}
           className="flex items-center gap-2"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#7a9e7e] text-sm font-bold text-white">
-            N
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-white">
+            <img
+              src="/naijabiz-logo.png"
+              alt="NaijaBiz"
+              className="h-full w-full object-contain"
+            />
           </div>
 
           <span className="font-bold tracking-tight text-[#253029]">
@@ -228,8 +235,12 @@ export default function AppShell({
             onClick={() => navigate("/")}
             className="flex items-center gap-3"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7a9e7e] text-lg font-bold text-white">
-              N
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white">
+              <img
+                src="/naijabiz-logo.png"
+                alt="NaijaBiz"
+                className="h-full w-full object-contain"
+              />
             </div>
 
             <div className="text-left">
@@ -334,8 +345,12 @@ export default function AppShell({
             </button>
 
             <div className="flex items-center gap-3 rounded-xl border border-[#e1e7e1] bg-white px-3 py-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#7a9e7e] text-xs font-bold text-white">
-                MB
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white">
+                <img
+                  src="/naijabiz-logo.png"
+                  alt="NaijaBiz"
+                  className="h-full w-full object-contain"
+                />
               </div>
 
               <div className="hidden xl:block">
