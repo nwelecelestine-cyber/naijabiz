@@ -42,3 +42,8 @@ next-env.d.ts
 node_modules/
 dist/
 .env
+
+# Local backups and temporary code exports
+*.sql
+customers-code.txt
+inventory-code.txt

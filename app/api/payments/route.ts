@@ -1,19 +1,63 @@
 import { db } from "@/src/prisma/db";
+import sql from "@/src/lib/db";
+import { createClient } from "@/src/lib/supabase/server";
 
-const BUSINESS_ID = 1;
+async function getBusinessIdForUser(userId: string): Promise<number | null> {
+  const memberships = await sql`
+    SELECT "businessId"
+    FROM public.business_member
+    WHERE "authUserId" = ${userId}
+    LIMIT 1
+  `;
+
+  if (memberships.length === 0) {
+    return null;
+  }
+
+  return Number(memberships[0].businessId);
+}
 
 export async function GET() {
   try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return Response.json(
+        {
+          success: false,
+          error: "You must be signed in.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const businessId = await getBusinessIdForUser(user.id);
+
+    if (!businessId) {
+      return Response.json(
+        {
+          success: false,
+          error: "No business is linked to this account.",
+        },
+        { status: 403 }
+      );
+    }
+
     const payments = await db.orm.public.Payment.where({
-      businessId: BUSINESS_ID,
+      businessId,
     }).all();
 
     const customers = await db.orm.public.Customer.where({
-      businessId: BUSINESS_ID,
+      businessId,
     }).all();
 
     const sales = await db.orm.public.Sale.where({
-      businessId: BUSINESS_ID,
+      businessId,
     }).all();
 
     const customerMap = new Map(
@@ -68,7 +112,7 @@ export async function GET() {
       payments: paymentHistory,
     });
   } catch (error) {
-    console.error(error);
+    console.error("PAYMENTS GET ERROR:", error);
 
     return Response.json(
       {

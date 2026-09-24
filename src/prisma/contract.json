@@ -8,6 +8,10 @@
       "model": "Business",
       "namespace": "public"
     },
+    "businessMember": {
+      "model": "BusinessMember",
+      "namespace": "public"
+    },
     "customer": {
       "model": "Customer",
       "namespace": "public"
@@ -120,6 +124,21 @@
                   "namespace": "public"
                 }
               },
+              "members": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "businessId"
+                  ]
+                },
+                "to": {
+                  "model": "BusinessMember",
+                  "namespace": "public"
+                }
+              },
               "payments": {
                 "cardinality": "1:N",
                 "on": {
@@ -192,6 +211,73 @@
               },
               "namespaceId": "public",
               "table": "business"
+            }
+          },
+          "BusinessMember": {
+            "fields": {
+              "authUserId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "businessId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "business": {
+                "cardinality": "N:1",
+                "on": {
+                  "localFields": [
+                    "businessId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Business",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authUserId": {
+                  "column": "authUserId"
+                },
+                "businessId": {
+                  "column": "businessId"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "public",
+              "table": "businessMember"
             }
           },
           "Customer": {
@@ -923,6 +1009,13 @@
                   "kind": "scalar"
                 }
               },
+              "unitCost": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
               "unitPrice": {
                 "nullable": false,
                 "type": {
@@ -982,6 +1075,9 @@
                 },
                 "totalPrice": {
                   "column": "totalPrice"
+                },
+                "unitCost": {
+                  "column": "unitCost"
                 },
                 "unitPrice": {
                   "column": "unitPrice"
@@ -1054,6 +1150,78 @@
                 ]
               },
               "uniques": []
+            },
+            "businessMember": {
+              "columns": {
+                "authUserId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "businessId": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "source": {
+                    "columns": [
+                      "businessId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "businessMember"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "business"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "businessId"
+                  ],
+                  "name": "businessMember_businessId_idx_ae0ed511",
+                  "prefix": "businessMember_businessId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "authUserId"
+                  ]
+                }
+              ]
             },
             "customer": {
               "columns": {
@@ -1624,6 +1792,11 @@
                   "nativeType": "int4",
                   "nullable": false
                 },
+                "unitCost": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
                 "unitPrice": {
                   "codecId": "pg/int4@1",
                   "nativeType": "int4",
@@ -1695,7 +1868,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "34e8c2424b23a48f7b5ea745a54ca8448a356cfa093627d7fc3fdbbc98dcd765"
+    "storageHash": "790852e7a04a420637af3552b515701d142b5dccb26aabfff09e62dc6abfa6d5"
   },
   "execution": {
     "executionHash": "26ccab51ec37f862ece98b435e42d9da993a760dc4f7563981eafb61778fd0e0",

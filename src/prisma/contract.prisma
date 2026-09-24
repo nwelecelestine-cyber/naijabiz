@@ -1,4 +1,4 @@
- // use prisma-next
+// use prisma-next
 
 model Business {
   id        Int        @id @default(autoincrement())
@@ -14,6 +14,16 @@ model Business {
   sales     Sale[]
   expenses  Expense[]
   payments  Payment[]
+  members   BusinessMember[]
+}
+
+model BusinessMember {
+  id         Int      @id @default(autoincrement())
+  authUserId String   @unique
+  business   Business @relation(fields: [businessId], references: [id])
+  businessId Int
+
+  createdAt TimestamptzString @default(now())
 }
 
 model Product {
@@ -81,6 +91,7 @@ model SaleItem {
 
   quantity   Int
   unitPrice  Int
+  unitCost   Int
   totalPrice Int
 
   createdAt  TimestamptzString @default(now())

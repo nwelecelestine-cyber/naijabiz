@@ -1,893 +1,596 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type Debt = {
-  saleId: number;
-  customerId: number;
-  customerName: string;
-  customerPhone: string | null;
-  totalAmount: number;
-  amountPaid: number;
-  amountOwed: number;
-  paymentStatus: string;
-  createdAt: string;
-};
-
-type CustomerDebt = {
-  customerId: number;
-  customerName: string;
-  customerPhone: string | null;
-  totalOwed: number;
-};
-
-type UnassignedDebt = {
-  saleId: number;
-  totalAmount: number;
-  amountPaid: number;
-  amountOwed: number;
-  paymentStatus: string;
-  notes: string | null;
-  createdAt: string;
-};
-
-type Customer = {
+type Product = {
   id: number;
   name: string;
-  phone: string | null;
+  sku: string | null;
+  category: string | null;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
 };
 
-export default function DebtsPage() {
-  const [debts, setDebts] = useState<Debt[]>([]);
-  const [customerDebts, setCustomerDebts] = useState<CustomerDebt[]>([]);
-  const [unassignedDebts, setUnassignedDebts] = useState<
-    UnassignedDebt[]
-  >([]);
+type Sale = {
+  id: number;
+  customerId: number | null;
+  totalAmount: number;
+  amountPaid: number;
+  paymentStatus: string;
+  createdAt: string;
+};
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
+type DashboardData = {
+  todaySales: number;
+  todayExpenses: number;
+  moneyOwed: number;
+  estimatedProfit: number;
+  productCount: number;
+  products: Product[];
+  recentSales: Sale[];
+};
 
-  const [totalDebt, setTotalDebt] = useState(0);
-  const [totalCustomerDebt, setTotalCustomerDebt] = useState(0);
-  const [totalUnassignedDebt, setTotalUnassignedDebt] = useState(0);
-
+export default function DashboardPage() {
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [savingPayment, setSavingPayment] = useState(false);
-
-  const [assigningSaleId, setAssigningSaleId] = useState<number | null>(
-    null
-  );
-
-  const [selectedCustomerForSale, setSelectedCustomerForSale] =
-    useState<Record<number, string>>({});
-
-  const [assigningCustomer, setAssigningCustomer] = useState(false);
-
-  const formatMoney = (amount: number) => {
-    return `₦${(amount / 100).toLocaleString("en-NG")}`;
-  };
-
-  async function loadData() {
+  async function loadDashboard() {
     try {
       setLoading(true);
+      setMessage("");
 
-      const [debtsResponse, customersResponse] = await Promise.all([
-        fetch("/api/debts"),
-        fetch("/api/customers"),
-      ]);
+      const response = await fetch("/api/dashboard", {
+        cache: "no-store",
+      });
 
-      const debtsData = await debtsResponse.json();
-      const customersData = await customersResponse.json();
+      const data = await response.json();
 
-      if (!debtsResponse.ok || !debtsData.success) {
-        setMessage(debtsData.error || "Could not load debts.");
+      if (!response.ok || !data.success) {
+        setMessage(data.error || "Could not load dashboard.");
         return;
       }
 
-      if (!customersResponse.ok || !customersData.success) {
-        setMessage(
-          customersData.error || "Could not load customers."
-        );
-        return;
-      }
-
-      setDebts(debtsData.debts || []);
-      setCustomerDebts(debtsData.customerDebts || []);
-      setUnassignedDebts(debtsData.unassignedDebts || []);
-
-      setTotalDebt(debtsData.totalDebt || 0);
-      setTotalCustomerDebt(debtsData.totalCustomerDebt || 0);
-      setTotalUnassignedDebt(debtsData.totalUnassignedDebt || 0);
-
-      setCustomers(customersData.customers || []);
+      setDashboard(data.dashboard);
     } catch (error) {
-      console.error(error);
-      setMessage("Something went wrong while loading debt information.");
+      console.error("Dashboard loading error:", error);
+      setMessage("Could not connect to the dashboard.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadData();
+    loadDashboard();
   }, []);
 
-  function openPaymentForm(debt: Debt) {
-    setSelectedDebt(debt);
-    setPaymentAmount("");
-    setMessage("");
-    setShowPaymentForm(true);
-  }
+  const formatMoney = (amount: number) => {
+    return `₦${(amount / 100).toLocaleString("en-NG", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  };
 
-  function closePaymentForm() {
-    if (savingPayment) {
-      return;
-    }
+  const lowStockProducts = useMemo(() => {
+    return (
+      dashboard?.products.filter((product) => product.quantity <= 5) ?? []
+    );
+  }, [dashboard]);
 
-    setShowPaymentForm(false);
-    setSelectedDebt(null);
-    setPaymentAmount("");
-  }
-
-  async function recordPayment() {
-    setMessage("");
-
-    if (!selectedDebt) {
-      setMessage("Please select a debt.");
-      return;
-    }
-
-    const nairaAmount = Number(paymentAmount);
-
-    if (!Number.isFinite(nairaAmount) || nairaAmount <= 0) {
-      setMessage("Please enter a valid payment amount.");
-      return;
-    }
-
-    const paymentInKobo = Math.round(nairaAmount * 100);
-
-    if (paymentInKobo > selectedDebt.amountOwed) {
-      setMessage(
-        `Payment cannot be greater than the outstanding balance of ${formatMoney(
-          selectedDebt.amountOwed
-        )}.`
-      );
-      return;
-    }
-
-    setSavingPayment(true);
-
-    try {
-      const response = await fetch("/api/debts/payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          saleId: selectedDebt.saleId,
-          paymentAmount: paymentInKobo,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setMessage(data.error || "Could not record payment.");
-        return;
-      }
-
-      const customerName = selectedDebt.customerName;
-
-      setShowPaymentForm(false);
-      setSelectedDebt(null);
-      setPaymentAmount("");
-
-      await loadData();
-
-      if (data.newBalance === 0) {
-        setMessage(
-          `Payment recorded successfully. ${customerName}'s debt has been fully paid.`
-        );
-      } else {
-        setMessage(
-          `Payment recorded successfully. ${customerName} now owes ${formatMoney(
-            data.newBalance
-          )}.`
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage("Something went wrong while recording the payment.");
-    } finally {
-      setSavingPayment(false);
-    }
-  }
-
-  async function assignCustomer(saleId: number) {
-    const customerId = Number(selectedCustomerForSale[saleId]);
-
-    if (!customerId) {
-      setMessage("Please select a customer first.");
-      return;
-    }
-
-    setAssigningSaleId(saleId);
-    setAssigningCustomer(true);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/debts/assign-customer", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          saleId,
-          customerId,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setMessage(data.error || "Could not assign customer.");
-        return;
-      }
-
-      setSelectedCustomerForSale((previous) => {
-        const updated = { ...previous };
-        delete updated[saleId];
-        return updated;
-      });
-
-      await loadData();
-
-      setMessage(
-        `Customer assigned successfully. ${data.customer.name} now has this debt attached to their account.`
-      );
-    } catch (error) {
-      console.error(error);
-      setMessage("Something went wrong while assigning the customer.");
-    } finally {
-      setAssigningSaleId(null);
-      setAssigningCustomer(false);
-    }
-  }
+  const totalUnits = useMemo(() => {
+    return (
+      dashboard?.products.reduce(
+        (total, product) => total + product.quantity,
+        0
+      ) ?? 0
+    );
+  }, [dashboard]);
 
   return (
-    <main className="min-h-screen bg-gray-100 text-gray-900">
-      <div className="flex min-h-screen">
+    <div className="min-h-screen bg-[#f6f8fb]">
+      <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        {/* PAGE HEADER */}
+        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-sm font-medium text-slate-400">
+              Overview
+            </p>
 
-        {/* SIDEBAR */}
-        <aside className="hidden w-64 border-r bg-white md:flex md:flex-col">
-          <div className="border-b px-6 py-6">
-            <h1 className="text-2xl font-bold">
-              NaijaBiz
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Good to see you
             </h1>
 
-            <p className="mt-1 text-xs text-gray-500">
-              Your AI business assistant
+            <p className="mt-2 text-sm text-slate-500">
+              Here is what is happening with your business today.
             </p>
           </div>
 
-          <nav className="flex-1 p-4">
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Main Menu
-            </p>
-
-            <div className="space-y-1">
-
-              <a
-                href="/"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ⌂
-                </span>
-                Dashboard
-              </a>
-
-              <a
-                href="/sales"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ₦
-                </span>
-                Sales
-              </a>
-
-              <a
-                href="/inventory"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ▣
-                </span>
-                Inventory
-              </a>
-
-              <a
-                href="/customers"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ♙
-                </span>
-                Customers
-              </a>
-
-              {/* FIXED: DEBTS IS NO LONGER PERMANENTLY BLACK */}
-              <a
-                href="/debts"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ◉
-                </span>
-                Debts
-              </a>
-
-              <a
-                href="#"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                <span className="w-5 text-center">
-                  ▥
-                </span>
-                Reports
-              </a>
-
-            </div>
-
-            <p className="mb-3 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              AI
-            </p>
-
-            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium text-gray-600 hover:bg-gray-100">
-              <span>
-                ✦
-              </span>
-              AI Assistant
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={loadDashboard}
+              disabled={loading}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Refreshing..." : "Refresh"}
             </button>
-          </nav>
-
-          <div className="border-t p-4">
-            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-gray-600 hover:bg-gray-100">
-              ⚙
-              Settings
-            </button>
-
-            <div className="mt-3 rounded-lg bg-gray-100 p-3">
-              <p className="text-xs text-gray-500">
-                Business account
-              </p>
-
-              <p className="mt-1 text-sm font-semibold">
-                My Business
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        {/* MAIN */}
-        <section className="flex-1">
-
-          {/* TOP BAR */}
-          <header className="flex items-center justify-between border-b bg-white px-5 py-4 md:px-8">
-            <div>
-              <p className="text-sm text-gray-500">
-                Business dashboard
-              </p>
-
-              <h2 className="text-lg font-semibold">
-                Debts
-              </h2>
-            </div>
 
             <a
               href="/sales"
-              className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800"
+              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
-              + Add Transaction
+              + Record Sale
             </a>
-          </header>
+          </div>
+        </div>
 
-          {/* CONTENT */}
-          <div className="p-5 md:p-8">
+        {/* ERROR */}
+        {message && (
+          <div className="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span>{message}</span>
 
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold">
-                Customer Debts
-              </h1>
+            <button
+              type="button"
+              onClick={loadDashboard}
+              className="font-semibold underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
-              <p className="mt-2 text-gray-500">
-                Track money customers owe your business.
-              </p>
-            </div>
+        {/* SUMMARY CARDS */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardCard
+            label="Today's Revenue"
+            value={
+              loading
+                ? "—"
+                : formatMoney(dashboard?.todaySales ?? 0)
+            }
+            description="Total sales recorded today"
+            icon="₦"
+            iconClass="bg-emerald-50 text-emerald-600"
+          />
 
-            {/* MESSAGE */}
-            {message && (
-              <div className="mb-6 rounded-lg border bg-white px-4 py-3 text-sm">
-                {message}
-              </div>
-            )}
+          <DashboardCard
+            label="Today's Expenses"
+            value={
+              loading
+                ? "—"
+                : formatMoney(dashboard?.todayExpenses ?? 0)
+            }
+            description="Business expenses today"
+            icon="↗"
+            iconClass="bg-amber-50 text-amber-600"
+          />
 
-            {/* SUMMARY CARDS */}
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <DashboardCard
+            label="Money Owed"
+            value={
+              loading
+                ? "—"
+                : formatMoney(dashboard?.moneyOwed ?? 0)
+            }
+            description="Outstanding customer balances"
+            icon="◉"
+            iconClass="bg-red-50 text-red-600"
+          />
 
-              <SummaryCard
-                title="Total Money Owed"
-                value={
-                  loading
-                    ? "Loading..."
-                    : formatMoney(totalDebt)
-                }
-                description="All outstanding balances"
-              />
+          <DashboardCard
+            label="Estimated Profit"
+            value={
+              loading
+                ? "—"
+                : formatMoney(dashboard?.estimatedProfit ?? 0)
+            }
+            description="Revenue minus expenses"
+            icon="✓"
+            iconClass="bg-blue-50 text-blue-600"
+          />
+        </div>
 
-              <SummaryCard
-                title="Customer Debt"
-                value={
-                  loading
-                    ? "Loading..."
-                    : formatMoney(totalCustomerDebt)
-                }
-                description="Already linked to customers"
-              />
-
-              <SummaryCard
-                title="Unassigned Debt"
-                value={
-                  loading
-                    ? "Loading..."
-                    : formatMoney(totalUnassignedDebt)
-                }
-                description="Needs a customer"
-              />
-
-              <SummaryCard
-                title="Customers With Debt"
-                value={
-                  loading
-                    ? "Loading..."
-                    : customerDebts.length.toString()
-                }
-                description="Customers currently owing"
-              />
-
-            </div>
-
-            {/* UNASSIGNED DEBTS */}
-            <div className="mt-8 rounded-xl border bg-white p-6">
-
+        {/* SECONDARY SUMMARY */}
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">
-                  Unassigned Debts
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Products
+                </p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  {loading ? "—" : dashboard?.productCount ?? 0}
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Products in your inventory
+                </p>
+              </div>
+
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600">
+                ▣
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Stock Units
+                </p>
+
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  {loading ? "—" : totalUnits.toLocaleString("en-NG")}
+                </p>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Total units currently in stock
+                </p>
+              </div>
+
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600">
+                #
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+          {/* RECENT SALES */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
+              <div>
+                <h2 className="font-bold text-slate-900">
+                  Recent Sales
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  These sales have outstanding balances, but no
-                  customer was recorded when the sale was made.
+                <p className="mt-1 text-xs text-slate-400">
+                  Your latest transactions
                 </p>
               </div>
 
-              {loading ? (
-                <p className="mt-6 text-sm text-gray-500">
-                  Loading...
-                </p>
-              ) : unassignedDebts.length === 0 ? (
-                <div className="mt-6 rounded-lg bg-gray-100 p-5">
-                  <p className="font-medium">
-                    No unassigned debts.
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    All outstanding sales are connected to customers.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-6 space-y-4">
-
-                  {unassignedDebts.map((debt) => (
-                    <div
-                      key={debt.saleId}
-                      className="rounded-xl border p-5"
-                    >
-
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
-                        <div>
-                          <p className="font-semibold">
-                            Sale #{debt.saleId}
-                          </p>
-
-                          <p className="mt-1 text-sm text-gray-500">
-                            {new Date(
-                              debt.createdAt
-                            ).toLocaleString("en-NG", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })}
-                          </p>
-
-                          <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                            <span>
-                              Total:{" "}
-                              <strong>
-                                {formatMoney(debt.totalAmount)}
-                              </strong>
-                            </span>
-
-                            <span>
-                              Paid:{" "}
-                              <strong>
-                                {formatMoney(debt.amountPaid)}
-                              </strong>
-                            </span>
-
-                            <span className="font-semibold text-red-600">
-                              Owed:{" "}
-                              {formatMoney(debt.amountOwed)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="w-full lg:w-80">
-
-                          <label className="mb-2 block text-sm font-medium">
-                            Who owes this money?
-                          </label>
-
-                          <select
-                            value={
-                              selectedCustomerForSale[
-                                debt.saleId
-                              ] || ""
-                            }
-                            onChange={(event) =>
-                              setSelectedCustomerForSale(
-                                (previous) => ({
-                                  ...previous,
-                                  [debt.saleId]:
-                                    event.target.value,
-                                })
-                              )
-                            }
-                            className="w-full rounded-lg border px-3 py-3 text-sm outline-none focus:border-black"
-                          >
-                            <option value="">
-                              Select customer
-                            </option>
-
-                            {customers.map((customer) => (
-                              <option
-                                key={customer.id}
-                                value={customer.id}
-                              >
-                                {customer.name}
-                                {customer.phone
-                                  ? ` — ${customer.phone}`
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-
-                          <button
-                            onClick={() =>
-                              assignCustomer(debt.saleId)
-                            }
-                            disabled={
-                              assigningCustomer &&
-                              assigningSaleId === debt.saleId
-                            }
-                            className="mt-3 w-full rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {assigningCustomer &&
-                            assigningSaleId === debt.saleId
-                              ? "Assigning..."
-                              : "Assign Customer"}
-                          </button>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-                  ))}
-
-                </div>
-              )}
-
+              <a
+                href="/sales"
+                className="text-sm font-semibold text-slate-700 hover:text-slate-900"
+              >
+                Record sale →
+              </a>
             </div>
 
-            {/* CUSTOMER BALANCES */}
-            <div className="mt-8 rounded-xl border bg-white p-6">
-
-              <div>
-                <h2 className="text-xl font-semibold">
-                  Customer Balances
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Total outstanding amount for each customer.
-                </p>
+            {loading ? (
+              <div className="p-8 text-center text-sm text-slate-400">
+                Loading recent sales...
               </div>
+            ) : dashboard?.recentSales.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/70 text-left">
+                      <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Sale
+                      </th>
 
-              {loading ? (
-                <p className="mt-6 text-sm text-gray-500">
-                  Loading...
-                </p>
-              ) : customerDebts.length === 0 ? (
-                <p className="mt-6 text-sm text-gray-500">
-                  No customers currently owe money.
-                </p>
-              ) : (
-                <div className="mt-6 overflow-x-auto">
+                      <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Date
+                      </th>
 
-                  <table className="w-full min-w-[600px] text-left">
+                      <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Status
+                      </th>
 
-                    <thead>
-                      <tr className="border-b text-sm text-gray-500">
-                        <th className="pb-3 font-medium">
-                          Customer
-                        </th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
 
-                        <th className="pb-3 font-medium">
-                          Phone
-                        </th>
+                  <tbody>
+                    {dashboard.recentSales.map((sale) => (
+                      <tr
+                        key={sale.id}
+                        className="border-b border-slate-100 last:border-0"
+                      >
+                        <td className="px-5 py-4">
+                          <p className="text-sm font-semibold text-slate-800">
+                            Sale #{sale.id}
+                          </p>
 
-                        <th className="pb-3 text-right font-medium">
-                          Amount Owed
-                        </th>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {sale.customerId
+                              ? "Customer sale"
+                              : "Walk-in customer"}
+                          </p>
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-500">
+                          {new Date(sale.createdAt).toLocaleDateString(
+                            "en-NG",
+                            {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            }
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <StatusBadge status={sale.paymentStatus} />
+                        </td>
+
+                        <td className="px-5 py-4 text-right text-sm font-bold text-slate-900">
+                          {formatMoney(sale.totalAmount)}
+                        </td>
                       </tr>
-                    </thead>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                icon="₦"
+                title="No sales yet"
+                text="Your recent sales will appear here."
+                href="/sales"
+                linkText="Record your first sale"
+              />
+            )}
+          </section>
 
-                    <tbody>
-
-                      {customerDebts.map((customer) => (
-                        <tr
-                          key={customer.customerId}
-                          className="border-b last:border-0"
-                        >
-                          <td className="py-4 font-medium">
-                            {customer.customerName}
-                          </td>
-
-                          <td className="py-4 text-sm text-gray-500">
-                            {customer.customerPhone || "—"}
-                          </td>
-
-                          <td className="py-4 text-right font-semibold text-red-600">
-                            {formatMoney(customer.totalOwed)}
-                          </td>
-                        </tr>
-                      ))}
-
-                    </tbody>
-
-                  </table>
-
-                </div>
-              )}
-
-            </div>
-
-            {/* OUTSTANDING SALES */}
-            <div className="mt-8 rounded-xl border bg-white p-6">
-
+          {/* INVENTORY HEALTH */}
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
               <div>
-                <h2 className="text-xl font-semibold">
-                  Outstanding Sales
+                <h2 className="font-bold text-slate-900">
+                  Inventory Health
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Individual customer-linked sales that still have
-                  money outstanding.
+                <p className="mt-1 text-xs text-slate-400">
+                  Products that need attention
                 </p>
               </div>
 
-              {loading ? (
-                <p className="mt-6 text-sm text-gray-500">
-                  Loading...
-                </p>
-              ) : debts.length === 0 ? (
-                <p className="mt-6 text-sm text-gray-500">
-                  No outstanding customer sales.
-                </p>
-              ) : (
-                <div className="mt-6 space-y-4">
-
-                  {debts.map((debt) => (
-                    <div
-                      key={debt.saleId}
-                      className="rounded-xl border p-5"
-                    >
-
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
-                        <div>
-                          <p className="font-semibold">
-                            {debt.customerName}
-                          </p>
-
-                          <p className="mt-1 text-sm text-gray-500">
-                            Sale #{debt.saleId}
-                            {debt.customerPhone
-                              ? ` • ${debt.customerPhone}`
-                              : ""}
-                          </p>
-
-                          <p className="mt-1 text-sm text-gray-500">
-                            {new Date(
-                              debt.createdAt
-                            ).toLocaleString("en-NG", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })}
-                          </p>
-
-                          <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                            <span>
-                              Total:{" "}
-                              <strong>
-                                {formatMoney(debt.totalAmount)}
-                              </strong>
-                            </span>
-
-                            <span>
-                              Paid:{" "}
-                              <strong>
-                                {formatMoney(debt.amountPaid)}
-                              </strong>
-                            </span>
-
-                            <span className="font-semibold text-red-600">
-                              Owed:{" "}
-                              {formatMoney(debt.amountOwed)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            openPaymentForm(debt)
-                          }
-                          className="rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-gray-800"
-                        >
-                          Record Payment
-                        </button>
-
-                      </div>
-
-                    </div>
-                  ))}
-
-                </div>
-              )}
-
+              <a
+                href="/inventory"
+                className="text-sm font-semibold text-slate-700 hover:text-slate-900"
+              >
+                View all →
+              </a>
             </div>
 
+            {loading ? (
+              <div className="p-8 text-center text-sm text-slate-400">
+                Loading inventory...
+              </div>
+            ) : lowStockProducts.length ? (
+              <div className="divide-y divide-slate-100">
+                {lowStockProducts.slice(0, 6).map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between gap-4 px-5 py-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {product.name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-400">
+                        {product.category || "Uncategorized"}
+                      </p>
+                    </div>
+
+                    <StockBadge quantity={product.quantity} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon="✓"
+                title="Stock looks healthy"
+                text="No products are currently low on stock."
+                href="/inventory"
+                linkText="Manage inventory"
+              />
+            )}
+          </section>
+        </div>
+
+        {/* QUICK ACTIONS */}
+        <section className="mt-6">
+          <div className="mb-4">
+            <h2 className="font-bold text-slate-900">
+              Quick Actions
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Common tasks for your business
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <QuickAction
+              href="/sales"
+              icon="₦"
+              title="Record Sale"
+              text="Create a new sale"
+            />
+
+            <QuickAction
+              href="/inventory"
+              icon="▣"
+              title="Add Product"
+              text="Update your inventory"
+            />
+
+            <QuickAction
+              href="/customers"
+              icon="♙"
+              title="Add Customer"
+              text="Create a customer record"
+            />
+
+            <QuickAction
+              href="/debts"
+              icon="◉"
+              title="Manage Debts"
+              text="View outstanding balances"
+            />
           </div>
         </section>
       </div>
-
-      {/* PAYMENT MODAL */}
-      {showPaymentForm && selectedDebt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-5">
-
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">
-                  Record Payment
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  {selectedDebt.customerName}
-                </p>
-              </div>
-
-              <button
-                onClick={closePaymentForm}
-                disabled={savingPayment}
-                className="text-xl text-gray-400 hover:text-black"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-lg bg-gray-100 p-4">
-
-              <p className="text-sm text-gray-500">
-                Outstanding balance
-              </p>
-
-              <p className="mt-1 text-2xl font-bold">
-                {formatMoney(selectedDebt.amountOwed)}
-              </p>
-
-            </div>
-
-            <div className="mt-5">
-
-              <label className="mb-2 block text-sm font-medium">
-                Payment Amount (₦)
-              </label>
-
-              <input
-                type="number"
-                min="1"
-                step="0.01"
-                value={paymentAmount}
-                onChange={(event) =>
-                  setPaymentAmount(event.target.value)
-                }
-                placeholder="Enter amount paid"
-                className="w-full rounded-lg border px-4 py-3 outline-none focus:border-black"
-              />
-
-            </div>
-
-            <div className="mt-6 flex gap-3">
-
-              <button
-                onClick={closePaymentForm}
-                disabled={savingPayment}
-                className="flex-1 rounded-lg border px-4 py-3 text-sm font-semibold hover:bg-gray-100 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={recordPayment}
-                disabled={savingPayment}
-                className="flex-1 rounded-lg bg-black px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingPayment
-                  ? "Saving..."
-                  : "Record Payment"}
-              </button>
-
-            </div>
-
-          </div>
-
-        </div>
-      )}
-    </main>
+    </div>
   );
 }
 
-/* SUMMARY CARD */
-
-function SummaryCard({
-  title,
+function DashboardCard({
+  label,
   value,
   description,
+  icon,
+  iconClass,
 }: {
-  title: string;
+  label: string;
   value: string;
   description: string;
+  icon: string;
+  iconClass: string;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-6">
-      <p className="text-sm text-gray-500">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {label}
+          </p>
+
+          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900">
+            {value}
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            {description}
+          </p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold ${iconClass}`}
+        >
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = status.toUpperCase();
+
+  const isPaid = normalized === "PAID";
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+        isPaid
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-amber-50 text-amber-700"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function StockBadge({ quantity }: { quantity: number }) {
+  if (quantity === 0) {
+    return (
+      <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+        Out of stock
+      </span>
+    );
+  }
+
+  if (quantity <= 5) {
+    return (
+      <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+        {quantity} left
+      </span>
+    );
+  }
+
+  return (
+    <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+      {quantity} in stock
+    </span>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  text,
+  href,
+  linkText,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+  href: string;
+  linkText: string;
+}) {
+  return (
+    <div className="flex min-h-56 flex-col items-center justify-center px-6 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-lg font-bold text-slate-500">
+        {icon}
+      </div>
+
+      <p className="mt-4 text-sm font-semibold text-slate-800">
         {title}
       </p>
 
-      <p className="mt-3 text-3xl font-bold">
-        {value}
+      <p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">
+        {text}
       </p>
 
-      <p className="mt-2 text-sm text-gray-500">
-        {description}
-      </p>
+      <a
+        href={href}
+        className="mt-4 text-sm font-semibold text-slate-700 hover:text-slate-900"
+      >
+        {linkText} →
+      </a>
     </div>
+  );
+}
+
+function QuickAction({
+  href,
+  icon,
+  title,
+  text,
+}: {
+  href: string;
+  icon: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
+        {icon}
+      </div>
+
+      <p className="mt-4 text-sm font-bold text-slate-900">
+        {title}
+      </p>
+
+      <p className="mt-1 text-xs text-slate-400">
+        {text}
+      </p>
+    </a>
   );
 }
